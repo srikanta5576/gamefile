@@ -1,0 +1,200 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shop - Haunted Awakening</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #total-orbs {
+            font-size: 24px;
+            margin: 20px;
+        }
+		.owned {
+            color: yellow;
+        }
+        .shop-item {
+            margin: 20px;
+            padding: 20px;
+            background: gray;
+            display: inline-block;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .shop-item:hover {
+            background: darkgray;
+        }
+        #message {
+            margin-top: 20px;
+            font-size: 20px;
+            color: yellow;
+        }
+        .button-container {
+            margin-top: 30px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 20px;
+            margin: 5px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #home { background: blue; color: white; }
+        #home:hover { background: darkblue; }
+        #play { background: green; color: white; }
+        #play:hover { background: darkgreen; }
+		
+		/* Tooltip container */
+    .tooltip {
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+    }
+
+    /* Tooltip text */
+    .tooltip .tooltiptext {
+        width: 180px;
+        background-color: #333;
+        color: #fff;
+        text-align: center;
+        padding: 8px;
+        border-radius: 5px;
+        position: absolute;
+        z-index: 1;
+        bottom: -45px; /* Moves tooltip below the item */
+        left: 50%;
+        transform: translateX(-50%) translateY(5px);
+        opacity: 0;
+        transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
+        font-size: 14px;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+        visibility: hidden;
+        pointer-events: none; /* Prevents tooltip from interfering with hover detection */
+    }
+
+    /* Show tooltip on hover */
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+        transform: translateX(-50%) translateY(0); /* Slight upward movement */
+    }
+
+    /* Hide tooltip smoothly when mouse leaves */
+    .tooltip:not(:hover) .tooltiptext {
+        opacity: 0;
+        transform: translateX(-50%) translateY(5px);
+        transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out, visibility 0.4s linear 0.4s;
+    }
+		
+    </style>
+</head>
+<body>
+    <h1>Shop</h1>
+    <div id="total-orbs">Total Orbs: 0</div>
+
+    <div class="shop-item tooltip" onclick="buyItem('speedBoost', 5)">
+        <h2>Speed Boost (5 Orbs)</h2>
+        <!--<p>Increase movement speed for 10 seconds.</p>-->
+		<span class="tooltiptext">Increases movement speed for 10 seconds.</span>
+        <p id="speedBoost-status"></p>
+    </div>
+	
+    <div class="shop-item tooltip" onclick="buyItem('shield', 5)">
+        <h2>Shield (5 Orbs)</h2>
+        <!--<p>Grants temporary invincibility.</p>-->
+		<span class="tooltiptext">Grants temporary invincibility.</span>
+        <p id="shield-status"></p>
+    </div>
+	
+    <div id="message"></div>
+
+    <div class="button-container">
+        <button id="home" onclick="goToHome()">Return to Home</button>
+        <button id="play" onclick="goToGame()">Play</button>
+    </div>
+
+    <script>
+        
+		setInterval(() => {
+        let totalOrbs = localStorage.getItem("totalOrbs");
+		document.getElementById("total-orbs").innerText = "Total Orbs: " + (totalOrbs ? totalOrbs : 0);
+    }, 1000);
+		
+		if (!localStorage.getItem("totalOrbs")) {
+		localStorage.setItem("totalOrbs", "0");
+		}else{
+		let totalOrbs = localStorage.getItem("totalOrbs");
+		//document.getElementById("total-orbs").innerText = "Total Orbs: " + (totalOrbs ? totalOrbs : 0);
+		}
+
+function buyItem(item, cost) {
+    document.getElementById("confirmText").innerText = `Buy ${item} for ${cost} Orbs?`;
+    pendingPurchase = { item, cost };
+    document.getElementById("confirmModal").style.display = "block";
+}
+
+function confirmPurchase(confirm) {
+    document.getElementById("confirmModal").style.display = "none";
+    if (!confirm || !pendingPurchase) return;
+
+    let totalOrbs = parseInt(localStorage.getItem("totalOrbs") || "0");
+
+    if (totalOrbs >= pendingPurchase.cost) {
+        localStorage.setItem(pendingPurchase.item, "true");
+        localStorage.setItem("totalOrbs", totalOrbs - pendingPurchase.cost);
+        updateShopUI();
+        document.getElementById("message").innerText = pendingPurchase.item + " purchased successfully!";
+    } else {
+        document.getElementById("message").innerText = "Not enough orbs!";
+    }
+
+    pendingPurchase = null; // Reset pending purchase
+}
+
+function updateShopUI() {
+    let totalOrbs = localStorage.getItem("totalOrbs");
+    document.getElementById("total-orbs").innerText = "Total Orbs: " + totalOrbs;
+
+    let items = ["speedBoost", "shield"];
+    items.forEach(item => {
+        if (localStorage.getItem(item) === "true") {
+            let button = document.querySelector(`[onclick="buyItem('${item}', 5)"]`);
+            if (button) {
+                button.style.opacity = "0.5"; // Make item look unavailable
+                button.style.pointerEvents = "none"; // Disable clicking
+                button.innerHTML += " (Owned)";
+            }
+        }
+    });
+}
+
+// Run when shop loads
+updateShopUI();
+
+
+        function goToHome() {
+            window.location.href = "home_page.html";
+        }
+
+        function goToGame() {
+            window.location.href = "haunted_forest_game.html";
+        }
+    </script>
+	
+<div id="confirmModal" style="display: none; position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8);
+    color: white; padding: 20px; border-radius: 10px; text-align: center;">
+    <p id="confirmText"></p>
+    <button onclick="confirmPurchase(true)">Yes</button>
+    <button onclick="confirmPurchase(false)">No</button>
+</div>	
+	
+</body>
+</html>

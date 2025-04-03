@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Haunted Awakening</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; color: white; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #score { position: absolute; top: 10px; left: 10px; font-size: 20px; }
+        #total-orbs { position: absolute; top: 10px; right: 10px; font-size: 20px; }
+        #powerup-status { top: 50px; left: 10px; color: yellow; }
+        #message { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; font-weight: bold; display: none; background: rgba(0, 0, 0, 0.7); padding: 20px; border-radius: 10px; }
+        .button-container { display: none; position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); }
+        .button-container button { padding: 15px 30px; font-size: 20px; margin: 5px; border: none; cursor: pointer; border-radius: 5px; }
+        #home { background: blue; color: white; }
+        #home:hover { background: darkblue; }
+        #shop { background: green; color: white; }
+        #shop:hover { background: darkgreen; }
+        #play { background: green; color: white; }
+        #play:hover { background: darkgreen; }
+    </style>
+</head>
+<body>
+    <div id="pauseMenu" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h2>Paused</h2>
+        <button onclick="resumeGame()">Resume</button>
+        <button onclick="window.location.href='home_page.html'">Quit to Home</button>
+    </div>
+    <div id="score">Score: 0</div>
+    <div id="total-orbs">Total Orbs: 0</div>
+    <div id="powerup-status"></div>
+    <div id="message"></div>
+    <div class="button-container" id="button-container">
+        <button id="home" onclick="goToHome()">Return to Home</button>
+        <button id="shop" onclick="goToShop()">Go to Shop</button>
+        <button id="play" onclick="goToGame()">Play Again</button>
+    </div>
+    <audio id="walkingSound" src="Audio/walking.wav"></audio>
+    <audio id="ghostSound" src="Audio/ghost.wav"></audio>
+    <audio id="gameOverSound" src="Audio/game over.mp3"></audio>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        if (!localStorage.getItem("totalOrbs")) {
+            localStorage.setItem("totalOrbs", "0");
+        }
+        let gamePaused = false;
+        let storedOrbs = localStorage.getItem("totalOrbs");
+        let totalOrbs = storedOrbs !== null ? parseInt(storedOrbs) : 0;
+        document.getElementById("total-orbs").innerText = "Total Orbs: " + totalOrbs;
+        const message = document.getElementById("message");
+        const buttonContainer = document.getElementById("button-container");
+
+        function goToHome() { window.location.href = 'home_page.html'; }
+        function goToShop() { window.location.href = "shop.html"; }
+        function goToGame() { window.location.href = "haunted_forest_game.html"; }
+
+        const playerImg = new Image(); playerImg.src = "Images/haunted game player.webp";
+        const ghostImg = new Image(); ghostImg.src = "Images/haunted game ghost.webp";
+        const bgImg = new Image(); bgImg.src = "Images/haunted forest bg.webp";
+        const orbImg = new Image(); orbImg.src = "Images/reward orb.webp";
+
+        let camera = { x: 0, y: 0 };
+        let bgOffset = 0;
+
+        function drawBackground() {
+            const bgWidth = bgImg.width;
+            const bgHeight = bgImg.height;
+
+            // Calculate scale to fit the background to the canvas
+            const scaleX = canvas.width / bgWidth;
+            const scaleY = canvas.height / bgHeight;
+            const scale = Math.max(scaleX, scaleY); // Use the larger scale to avoid gaps
+
+            const scaledWidth = bgWidth * scale;
+            const scaledHeight = bgHeight * scale;
+
+            while (bgOffset < camera.x) {
+                bgOffset += scaledWidth;
+            }
+            while (bgOffset > camera.x + canvas.width) {
+                bgOffset -= scaledWidth;
+            }
+
+            ctx.drawImage(bgImg, bgOffset - camera.x, -camera.y, scaledWidth, scaledHeight);
+            ctx.drawImage(bgImg, bgOffset - camera.x - scaledWidth, -camera.y, scaledWidth, scaledHeight);
+            ctx.drawImage(bgImg, bgOffset - camera.x + scaledWidth, -camera.y, scaledWidth, scaledHeight);
+        }
+
+        const player = { x: 100, y: canvas.height - 100, width: 40, height: 60, speed: 5, dx: 0, dy: 0, jumping: false, invincible: false };
+
+        function drawPlayer() {
+            ctx.drawImage(playerImg, player.x - camera.x, player.y - camera.y, player.width, player.height);
+        }
+
+        const ghosts = [{ x: 400, y: canvas.height - 100, width: 40, height: 60, speed: 2 }];
+
+        function drawGhosts() {
+            ghosts.forEach(ghost => {
+                ctx.drawImage(ghostImg, ghost.x - camera.x, ghost.y - camera.y, ghost.width, ghost.height);
+            });
+        }
+
+        let orbs = [
+            { x: 200, y: canvas.height - 120, width: 20, height: 20 },
+            { x: 500, y: canvas.height - 200, width: 20, height: 20 },
+            { x: 800, y: canvas.height - 150, width: 20, height: 20 },
+            { x: 1100, y: canvas.height - 180, width: 20, height: 20 },
+            { x: 1200, y: canvas.height - 100, width: 20, height: 20 }
+        ];
+
+        let collectedOrbs = 0;
+        let score = 0;
+        let gameOver = false;
+        let powerups = { speedBoost: localStorage.getItem("speedBoost") === "true", shield: localStorage.getItem("shield") === "true" };
+
+        function activatePowerup(type) {
+            const powerupStatus = document.getElementById("powerup-status");
+            if (type === "speedBoost") {
+                player.speed = 20;
+                powerupStatus.innerText = "Speed Boost Active!";
+                localStorage.setItem("speedBoost", "active");
+                setTimeout(() => { player.speed = 10; localStorage.removeItem("speedBoost"); powerupStatus.innerText = ""; }, 10000);
+            } else if (type === "shield") {
+                player.invincible = true;
+                powerupStatus.innerText = "Shield Active!";
+                localStorage.setItem("shield", "active");
+                setTimeout(() => { player.invincible = false; localStorage.removeItem("shield"); powerupStatus.innerText = ""; }, 10000);
+            } else if (type === "doubleOrbs") {
+                player.orbMultiplier = 2;
+                powerupStatus.innerText = "Double Orbs Active!";
+                localStorage.setItem("doubleOrbs", "active");
+                setTimeout(() => { player.orbMultiplier = 1; localStorage.removeItem("doubleOrbs"); powerupStatus.innerText = ""; }, 10000);
+            } else { console.warn("Unknown power-up type:", type); }
+        }
+
+        if (powerups.speedBoost) activatePowerup("speedBoost");
+        if (powerups.shield) activatePowerup("shield");
+
+        function drawOrbs() {
+            orbs.forEach(orb => {
+                ctx.drawImage(orbImg, orb.x - camera.x, orb.y - camera.y, orb.width, orb.height);
+            });
+        }
+
+        const gravity = 0.5;
+        const floorHeight = canvas.height - 80;
+
+        function movePlayer() {
+            if (gameOver) return;
+            player.x += player.dx;
+            player.y += player.dy;
+            if (player.y + player.height < floorHeight) { player.dy += gravity; } else { player.dy = 0; player.y = floorHeight - player.height; player.jumping = false; }
+            camera.x = player.x - canvas.width / 2;
+            if (camera.x < 0) camera.x = 0;
+        }
+
+        let ghostSoundUnlocked = false;
+        document.addEventListener("click", unlockSound, { once: true });
+        function unlockSound() {
+            let ghostSound = document.getElementById("ghostSound");
+            if (ghostSound) {
+                let playPromise = ghostSound.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => { ghostSoundUnlocked = true; }).catch(error => console.log("Audio unlock failed:", error));
+                }
+            }
+        }
+
+        function playGhostSound() {
+            let ghostSound = document.getElementById("ghostSound");
+            if (ghostSound && ghostSoundUnlocked) {
+                ghostSound.currentTime = 0;
+                ghostSound.play().catch(error => console.log("Error playing sound:", error));
+            }
+        }
+
+        function moveGhosts() {
+            if (gameOver) return;
+            ghosts.forEach(ghost => {
+                if (ghost.x > player.x) ghost.x -= ghost.speed;
+                else ghost.x += ghost.speed;
+            });
+            playGhostSound();
+        }
+
+        function checkCollision() {
+            if (gameOver) return;
+            ghosts.forEach(ghost => {
+                if (player.invincible == false && player.x < ghost.x + ghost.width && player.x + player.width > ghost.x && player.y < ghost.y + ghost.height && player.y + player.height > ghost.y) {
+                    endGame("Game Over! The ghosts got you!");
+                }
+            });
+            orbs = orbs.filter(orb => {
+                if (player.x < orb.x + orb.width && player.x + player.width > orb.x && player.y < orb.y + orb.height && player.y + player.height > orb.y) {
+                    score++;
+                    document.getElementById("score").innerText = "Score: " + score;
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        function endGame(text) {
+            gameOver = true;
+            message.innerText = text;
+            message.style.display = "block";
+            buttonContainer.style.display = "block";
+            totalOrbs += score;
+            localStorage.setItem("totalOrbs", totalOrbs.toString());
+            document.getElementById("total-orbs").innerText = "Total Orbs: " + totalOrbs;
+            let gameOverSound = document.getElementById("gameOverSound");
+            if (gameOverSound) {
+                gameOverSound.currentTime = 0;
+                let playPromise = gameOverSound.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log("Autoplay blocked! Playing after user interaction.");
+                        document.addEventListener("click", () => { gameOverSound.play(); }, { once: true });
+                    });
+                }
+            }
+        }
+
+        function update() {
+            if (gameOver || gamePaused) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            drawPlayer();
+            drawGhosts();
+            drawOrbs();
+            movePlayer();
+            moveGhosts();
+            checkCollision();
+            requestAnimationFrame(update);
+            orbs = orbs.filter(orb => {
+                let dx = player.x - orb.x;
+                let dy = player.y - orb.y;
+                if (Math.sqrt(dx * dx + dy * dy) < 20) {
+                    collectedOrbs += 1;
+                    document.getElementById("score").innerText = "Orbs Collected: " + collectedOrbs;
+                    return false;
+                }
+                return true;
+            });
+            if (orbs.length === 0) { endGame("You Won!"); }
+        }
+
+        function playWalkingSound() {
+            let walkingSound = document.getElementById("walkingSound");
+            if (walkingSound) {
+                walkingSound.currentTime = 0;
+                walkingSound.play().catch(error => console.log("Error playing sound:", error));
+            }
+        }
+
+        function keyDown(e) {
+            if (gameOver) return;
+            if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                player.dx = e.key === "ArrowRight" ? player.speed : -player.speed;
+                playWalkingSound();
+            }
+            if (e.key === "ArrowUp" && !player.jumping) { player.dy = -10; player.jumping = true; }
+        }
+
+        function keyUp(e) { if (e.key === "ArrowRight" || e.key === "ArrowLeft") player.dx = 0; }
+        document.addEventListener("keydown", keyDown);
+        document.addEventListener("keyup", keyUp);
+        document.addEventListener("keydown", function(event) { if (event.key === "Escape") { togglePause(); } });
+
+        function togglePause() {
+            let menu = document.getElementById("pauseMenu");
+            if (!gamePaused) { menu.style.display = "block"; gamePaused = true; } else { menu.style.display = "none"; gamePaused = false; update(); }
+        }
+
+        function resumeGame() { let menu = document.getElementById("pauseMenu"); menu.style.display = "none"; gamePaused = false; update(); }
+        function loadPowerups() { if (localStorage.getItem("speedBoost") === "active") { activatePowerup("speedBoost"); } if (localStorage.getItem("shield") === "active") { activatePowerup("shield"); } }
+        window.onload = loadPowerups;
+        update();
+    </script>
+</body>
+</html>
