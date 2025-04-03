@@ -19,6 +19,26 @@
         #shop:hover { background: darkgreen; }
         #play { background: green; color: white; }
         #play:hover { background: darkgreen; }
+		
+		#joystick-container {
+    position: absolute;
+    bottom: 20px;
+    left: 50px;
+    width: 100px;
+    height: 100px;
+}
+
+#joystick {
+    width: 80px;
+    height: 80px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    position: relative;
+    touch-action: none;
+    cursor: grab;
+}
+
+		
     </style>
 </head>
 <body>
@@ -27,6 +47,11 @@
         <button onclick="resumeGame()">Resume</button>
         <button onclick="window.location.href='home_page.html'">Quit to Home</button>
     </div>
+	
+	<div id="joystick-container">
+    <div id="joystick"></div>
+</div>
+	
     <div id="score">Score: 0</div>
     <div id="total-orbs">Total Orbs: 0</div>
     <div id="powerup-status"></div>
@@ -276,6 +301,54 @@
             let menu = document.getElementById("pauseMenu");
             if (!gamePaused) { menu.style.display = "block"; gamePaused = true; } else { menu.style.display = "none"; gamePaused = false; update(); }
         }
+		
+let joystick = document.getElementById("joystick");
+let playerSpeed = 5;
+let joystickActive = false;
+let joystickCenter = { x: 0, y: 0 };
+
+function startJoystick(event) {
+    joystickActive = true;
+    let rect = joystick.getBoundingClientRect();
+    joystickCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+
+    updateJoystick(event);
+}
+
+function updateJoystick(event) {
+    if (!joystickActive) return;
+
+    let clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    let clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    let deltaX = clientX - joystickCenter.x;
+    let deltaY = clientY - joystickCenter.y;
+
+    let magnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    if (magnitude > 10) { // Move only if joystick is pushed
+        player.dx = (deltaX / magnitude) * playerSpeed;
+        player.dy = (deltaY / magnitude) * playerSpeed;
+    }
+}
+
+function stopJoystick() {
+    joystickActive = false;
+    player.dx = 0;
+    player.dy = 0;
+}
+
+// 🎮 Enable both mouse and touch controls
+joystick.addEventListener("mousedown", startJoystick);
+joystick.addEventListener("mousemove", updateJoystick);
+joystick.addEventListener("mouseup", stopJoystick);
+joystick.addEventListener("mouseleave", stopJoystick);
+
+joystick.addEventListener("touchstart", startJoystick);
+joystick.addEventListener("touchmove", updateJoystick);
+joystick.addEventListener("touchend", stopJoystick);
+
+
+
 
         function resumeGame() { let menu = document.getElementById("pauseMenu"); menu.style.display = "none"; gamePaused = false; update(); }
         function loadPowerups() { if (localStorage.getItem("speedBoost") === "active") { activatePowerup("speedBoost"); } if (localStorage.getItem("shield") === "active") { activatePowerup("shield"); } }
